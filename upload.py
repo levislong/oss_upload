@@ -303,6 +303,20 @@ def read_excel(f: BytesIO) -> dict:
       raise UploadTaskException('文件不包含有效的sheet')
     return dfs
 
+def read_shp(f: str) -> gpd.GeoDataFrame:
+  """读取shp, 自适应编码"""
+  try:
+    try:
+      # TODO: may use chardet on .dbf
+      df = gpd.read_file(f)
+    except UnicodeDecodeError:
+      df = gpd.read_file(f, encoding='utf8')
+  except Exception as e:
+    logging.warning(e)
+    raise UploadTaskException('文件读取错误, 请检查文件格式是否为shp')
+  else:
+    return df
+
 def data_processing(df, task_type, object_type):
   """处理文件内容"""
   if task_type == 'big_screen':
@@ -442,7 +456,6 @@ def handler(event, context):
       if target is None:
         raise UploadTaskException('压缩文件里没有shp文件')
     else:
-      # target = BytesIO(open(data['path'], 'rb').read())
       target = bucket.get_object(path)
   except Exception as e:
     logging.warning(e)
