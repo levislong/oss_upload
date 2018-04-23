@@ -16,7 +16,7 @@ from shapely.geometry.base import BaseGeometry, BaseMultipartGeometry
 from shapely.wkb import loads as wkb_loads
 from shapely.wkt import loads as wkt_loads
 
-
+rarfile.UNRAR_TOOL = './unrar'
 
 
 class UploadTaskException(Exception):
