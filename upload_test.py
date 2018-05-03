@@ -85,7 +85,6 @@ def df_2_gdf(df: pd.DataFrame):
 
 def sanity_check(f, base_name, task_type) -> [pd.DataFrame, str]:
   """检查文件有效性"""
-
   if task_type == 'big_screen':
     return sanity_check_big_screen(f, base_name), task_type
   elif task_type in ('poi', 'plain'):
@@ -95,6 +94,7 @@ def sanity_check(f, base_name, task_type) -> [pd.DataFrame, str]:
       # TODO: a bit hacking
       if e.args[0] == 'use_geometry':
         f.seek(0)
+        print(e, '擦擦擦')
         return sanity_check_geometry(f, base_name), 'geometry'
       else:
         raise
@@ -120,6 +120,7 @@ def sanity_check_poi_or_plain(f: [BytesIO, str], base_name) -> pd.DataFrame:
     df = read_csv(f)
   elif extension == '.xlsx':
     dfs = read_excel(f)
+    print(dfs,'哈哈哈1')
     if len(dfs) == 1:
       # single sheet
       sheet_name, df = dfs.popitem()
@@ -135,7 +136,6 @@ def sanity_check_poi_or_plain(f: [BytesIO, str], base_name) -> pd.DataFrame:
   if 'geometry' in df.columns:
     raise UploadTaskException('use_geometry')
   df['类型'] = base.split('_', 1)[-1].strip()
-
   columns_exists = set(df.columns)
   if '名称' not in df.columns:
     raise UploadTaskException(
@@ -212,9 +212,10 @@ def sanity_check_geometry(f: [BytesIO, str], base_name) -> pd.DataFrame:
   """geometry shape 文件 sanity check"""
   base, extension = os.path.splitext(base_name)
   if extension == '.csv':
-    df = df_2_gdf(self.read_csv(f))
+    df = df_2_gdf(read_csv(f))
   elif extension == '.xlsx':
     dfs = read_excel(f)
+    print(dfs,'哈哈哈')
     if len(dfs) == 1:
       # single sheet
       sheet_name, df = dfs.popitem()
@@ -234,7 +235,6 @@ def sanity_check_geometry(f: [BytesIO, str], base_name) -> pd.DataFrame:
 
   df = change_df_eng_field_to_chi(df)
   df['类型'] = base.split('_', 1)[-1].strip()
-
   columns_required = {'名称', 'geometry'}
   columns_exists = set(df.columns)
   columns_missing = columns_required - columns_exists
@@ -269,7 +269,6 @@ def sanity_check_geometry(f: [BytesIO, str], base_name) -> pd.DataFrame:
     raise UploadTaskException(
         '包含非Polygon和MultiPolygon, 总数: {}, 行号(前10): {}'.format(
             non_polygon.shape[0], non_polygon.index[:10].tolist()))
-
   return df
 
 def read_csv(f: BytesIO) -> pd.DataFrame:
@@ -287,15 +286,17 @@ def read_csv(f: BytesIO) -> pd.DataFrame:
   else:
     return df
 
-def read_excel(f: BytesIO) -> dict:
+def read_excel(f) -> dict:
   """读取excel, 自适应编码"""
   try:
     try:
+      print(type(f))
       dfs = pd.read_excel(f, sheet_name=None)
     except UnicodeDecodeError:
       # f.seek(0)
       dfs = pd.read_excel(f, encoding='gb18030', sheet_name=None)
   except Exception as e:
+    print(e, '**')
     logging.warning(e)
     raise UploadTaskException('文件读取错误, 请检查文件格式是否为xlsx')
   else:
@@ -319,6 +320,8 @@ def read_shp(f: str) -> gpd.GeoDataFrame:
 
 def data_processing(df, task_type, object_type):
   """处理文件内容"""
+  print(df, '哈哈哈4')
+  print(task_type)
   if task_type == 'big_screen':
     df = data_processing_big_screen(df, object_type)
   elif task_type in ('poi', 'plain'):
@@ -363,6 +366,7 @@ def data_processing_poi_or_plain(df, object_type):
 
 def data_processing_geometry(df: gpd.GeoDataFrame, object_type):
     """Update data into bd_region_special_customer"""
+    print(df, '哈哈哈3')
     df = df.rename(columns={'名称': 'name',
                             '类型': 'object_type',
                             '经度': 'lng',
@@ -465,6 +469,7 @@ def handler(event, context):
   else:
     bucket.put_object(new_dir_name+'/stage/'+base+'_read_file_succeed', 'event')
 
+
 # sanity_check
   try:
     print('有效性检验中')
@@ -480,7 +485,7 @@ def handler(event, context):
   # data_processing
   try:
     print('数据处理中')
-    df = data_processing(df, data_type, key)
+    df = data_processing(df, task_type, key)
   except Exception as e:
     logging.warning(e)
     print('app id:', app_id, '文件名:', base_name, '数据处理失败！')
@@ -493,3 +498,81 @@ def handler(event, context):
   finally:
     if temp_dir is not None:
       temp_dir.cleanup()
+
+def test(path):
+  dir_name = os.path.dirname(path)
+  app_id = os.path.basename(dir_name)
+  new_dir_name = dir_name.replace('upload', 'proccessed')
+  base_name = os.path.basename(path)  
+  extension = os.path.splitext(base_name)[-1]
+  base = os.path.splitext(base_name)[0]
+
+  target = None
+  key = base.split('_', 1)[-1].strip()
+  temp_dir = tempfile.TemporaryDirectory()
+
+  # get_type
+  try:
+    print('获取任务类型')
+    task_type = load_type(extension)
+  except Exception as e:
+    logging.warning(e)
+    return print('获取任务类型失败!')
+  else:
+    print('获取任务类型成功!','任务类型为:',task_type)
+
+
+ # read_file
+  try:
+    print('读取文件中')
+    if extension in ['.gz', '.zip', '.rar']:
+      # temp_dir = tempfile.TemporaryDirectory()
+      file_name = os.path.join(temp_dir.name, base_name)
+      # TODO: improve this io part
+      bucket.get_object_to_file(path, file_name)
+      # TODO: move to pyunpack
+      if extension == '.rar':
+        rarfile.RarFile(file_name).extractall(temp_dir.name)
+      else:
+        shutil.unpack_archive(file_name, temp_dir.name)
+      for i in glob(os.path.join(temp_dir.name, '**'), recursive=True):
+        if i.endswith('.shp'):
+          target = os.path.join(temp_dir.name, i)
+      if target is None:
+        raise UploadTaskException('压缩文件里没有shp文件')
+    else:
+      target = open(path, 'rb')
+  except Exception as e:
+    logging.warning(e)
+    print('app id:', app_id, '文件名:', base_name, '读取失败！')
+    return print('文件读取失败!')
+  else:
+    print('文件读取成功!')
+
+
+# sanity_check
+  try:
+    df, task_type = sanity_check(target, base_name, task_type)
+  except Exception as e:
+    logging.warning(e)
+    print('app id:', app_id, '文件名:', base_name, '有效性检验失败！')
+    # bucket.put_object(new_dir_name+'/exceptionws/'+base+'.txt', str(e))
+    return print('sanity check失败!')
+  else:
+    print('sanity check成功!')
+
+  # data_processing
+  try:
+    print('数据处理中')
+    df = data_processing(df, task_type, key)
+  except Exception as e:
+    logging.warning(e)
+    return print('app id:', app_id, '文件名:', base_name, '数据处理失败！')
+  else:
+    pickle_tempfile = base+'_pickle'
+    df.to_pickle(pickle_tempfile)
+  finally:
+    if temp_dir is not None:
+      temp_dir.cleanup()
+
+test('24个城市边界test1.xlsx')
