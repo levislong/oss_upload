@@ -279,7 +279,7 @@ def read_csv(f: BytesIO) -> pd.DataFrame:
     try:
       df = pd.read_csv(f)
     except UnicodeDecodeError:
-      # f.seek(0)
+      f.seek(0)
       df = pd.read_csv(f, encoding='gb18030')
   except Exception as e:
     logging.warning(e)
@@ -293,7 +293,7 @@ def read_excel(f: BytesIO) -> dict:
     try:
       dfs = pd.read_excel(f, sheet_name=None)
     except UnicodeDecodeError:
-      # f.seek(0)
+      f.seek(0)
       dfs = pd.read_excel(f, encoding='gb18030', sheet_name=None)
   except Exception as e:
     logging.warning(e)
