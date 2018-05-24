@@ -212,7 +212,7 @@ def sanity_check_geometry(f: [BytesIO, str], base_name) -> pd.DataFrame:
   """geometry shape 文件 sanity check"""
   base, extension = os.path.splitext(base_name)
   if extension == '.csv':
-    df = df_2_gdf(self.read_csv(f))
+    df = df_2_gdf(read_csv(f))
   elif extension == '.xlsx':
     dfs = read_excel(f)
     if len(dfs) == 1:
@@ -460,7 +460,7 @@ def handler(event, context):
       target = BytesIO(bucket.get_object(path).read())
   except Exception as e:
     logging.warning(e)
-    print('app id:', app_id, '文件名:', base_name, '读取失败！')
+    logging.warning('app id:', app_id, '文件名:', base_name, '读取失败！')
     return bucket.put_object(new_dir_name+'/stage/'+base+'_read_file_failed', str(e))
   else:
     bucket.put_object(new_dir_name+'/stage/'+base+'_read_file_succeed', 'event')
@@ -471,7 +471,7 @@ def handler(event, context):
     df, data_type = sanity_check(target, base_name, task_type)
   except Exception as e:
     logging.warning(e)
-    print('app id:', app_id, '文件名:', base_name, '有效性检验失败！')
+    logging.warning('app id:', app_id, '文件名:', base_name, '有效性检验失败！')
     # bucket.put_object(new_dir_name+'/exceptionws/'+base+'.txt', str(e))
     return bucket.put_object(new_dir_name+'/stage/'+base+'_sanity_check_failed', str(e))
   else:
@@ -483,7 +483,7 @@ def handler(event, context):
     df = data_processing(df, data_type, key)
   except Exception as e:
     logging.warning(e)
-    print('app id:', app_id, '文件名:', base_name, '数据处理失败！')
+    logging.warning('app id:', app_id, '文件名:', base_name, '数据处理失败！')
     return bucket.put_object(new_dir_name+'/stage/'+base+'_data_processing_failed', str(e))
   else:
     pickle_tempfile = os.path.join(temp_dir.name, base+'_pickle')
